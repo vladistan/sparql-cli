@@ -32,7 +32,20 @@ def _detect_default_format() -> OutputFormat:
     return OutputFormat.tsv
 
 
+def _get_global_options(
+    ctx: typer.Context | None,
+) -> tuple[str | None, str | None]:
+    """Return (profile, endpoint) from context or (None, None) if unavailable."""
+    if ctx and ctx.obj:
+        return (
+            ctx.obj.get("profile"),
+            ctx.obj.get("endpoint"),
+        )
+    return None, None
+
+
 def query(
+    ctx: typer.Context,
     query_file: str | None = typer.Argument(  # noqa: B008
         None,
         help="SPARQL query file (.rq) or inline query string",
@@ -136,6 +149,11 @@ def query(
     except ConfigError as e:
         typer.echo(str(e), err=True)
         raise typer.Exit(ExitCode.INPUT_ERROR) from e
+
+    # Merge global options (command-specific takes precedence)
+    global_profile, global_endpoint = _get_global_options(ctx)
+    profile = profile or global_profile
+    endpoint = endpoint or global_endpoint
 
     # Resolve configuration with precedence
     try:

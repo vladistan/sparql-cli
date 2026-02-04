@@ -7,7 +7,7 @@ packages = ["sparql"]
 
 [project]
 name = "sparql-cli"
-version = "0.1.0"
+version = "0.1.1"
 description = "CLI tool for querying SPARQL endpoints"
 readme = "README.md"
 license = "MIT"
