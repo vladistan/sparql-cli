@@ -99,6 +99,30 @@ def test_query_invalid_sparql_returns_error():
     assert result.exit_code == ExitCode.NETWORK_ERROR
 
 
+def test_query_rejects_rdf_format_for_select():
+    result = runner.invoke(
+        app,
+        [
+            "query", "--endpoint", "http://example.org/sparql",
+            "-e", "SELECT * WHERE { ?s ?p ?o }", "-f", "turtle",
+        ],
+    )
+    assert result.exit_code == ExitCode.INPUT_ERROR
+    assert "CONSTRUCT or DESCRIBE" in result.output
+
+
+def test_query_rejects_rdf_format_for_ask():
+    result = runner.invoke(
+        app,
+        [
+            "query", "--endpoint", "http://example.org/sparql",
+            "-e", "ASK { ?s ?p ?o }", "-f", "ntriples",
+        ],
+    )
+    assert result.exit_code == ExitCode.INPUT_ERROR
+    assert "CONSTRUCT or DESCRIBE" in result.output
+
+
 def test_query_help_shows_options():
     result = runner.invoke(app, ["query", "--help"])
 

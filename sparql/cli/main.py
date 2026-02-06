@@ -131,8 +131,8 @@ def test_sentry() -> None:
 
     # 2. Performance tracing test (parent + child spans)
     with sentry_sdk.start_transaction(op="test", name="phase1_test"):
-        with sentry_sdk.start_span(op="parent", description="Parent span"):
-            with sentry_sdk.start_span(op="child", description="Child span"):
+        with sentry_sdk.start_span(op="parent", name="Parent span"):
+            with sentry_sdk.start_span(op="child", name="Child span"):
                 pass
 
     # 3. Flush to ensure delivery

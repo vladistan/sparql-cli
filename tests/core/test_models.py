@@ -116,3 +116,52 @@ def test_endpoint_config_rejects_negative_timeout():
 
     with pytest.raises(ValidationError):
         EndpointConfig(url="https://example.org/sparql", timeout=-1.0)
+
+
+def test_binding_value_coerces_float_to_string():
+    """Float values from xsd:double datatypes should be coerced to strings.
+
+    Some SPARQL endpoints return numeric values as Python floats in JSON
+    responses (e.g., DBpedia with xsd:double literals like wavelength).
+    """
+    from sparql.core.models import BindingValue
+
+    data = {
+        "type": "typed-literal",
+        "value": 4.95e-07,  # Float, not string
+        "datatype": "http://www.w3.org/2001/XMLSchema#double",
+    }
+    result = BindingValue(**data)
+
+    assert result.type == "typed-literal"
+    assert result.value == "4.95e-07"
+    assert result.datatype == "http://www.w3.org/2001/XMLSchema#double"
+
+
+def test_binding_value_coerces_int_to_string():
+    """Integer values should be coerced to strings."""
+    from sparql.core.models import BindingValue
+
+    data = {
+        "type": "typed-literal",
+        "value": 42,  # Int, not string
+        "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+    }
+    result = BindingValue(**data)
+
+    assert result.type == "typed-literal"
+    assert result.value == "42"
+
+
+def test_binding_value_preserves_string_value():
+    """String values should pass through unchanged."""
+    from sparql.core.models import BindingValue
+
+    data = {
+        "type": "typed-literal",
+        "value": "42",
+        "datatype": "http://www.w3.org/2001/XMLSchema#integer",
+    }
+    result = BindingValue(**data)
+
+    assert result.value == "42"

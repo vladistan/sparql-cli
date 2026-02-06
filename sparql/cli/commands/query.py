@@ -1,16 +1,19 @@
 """Query command for executing SPARQL queries against endpoints."""
 
 import sys
+import time
 
+import sentry_sdk
 import typer
 
 from sparql._version import __version__
-from sparql.cli.output import OutputFormat
-from sparql.core.client import SPARQLClient
+from sparql.cli.output import RDF_FORMAT_ACCEPT_HEADERS, OutputFormat
+from sparql.core.client import SPARQLClient, _is_rdf_query
 from sparql.core.config import AuthType, load_config, resolve_config
 from sparql.core.exceptions import ConfigError, NetworkError
 from sparql.core.exceptions import TimeoutError as SPARQLTimeoutError
 from sparql.core.exit_codes import ExitCode
+from sparql.core.logging import get_logger
 from sparql.core.query_source import resolve_query_source
 from sparql.formatters import (
     CSVFormatter,
@@ -23,10 +26,6 @@ from sparql.formatters import (
 
 
 def _detect_default_format() -> OutputFormat:
-    """Detect default format based on whether stdout is a TTY.
-
-    Returns table for interactive terminal, tsv for piped output.
-    """
     if sys.stdout.isatty():
         return OutputFormat.table
     return OutputFormat.tsv
@@ -35,7 +34,6 @@ def _detect_default_format() -> OutputFormat:
 def _get_global_options(
     ctx: typer.Context | None,
 ) -> tuple[str | None, str | None]:
-    """Return (profile, endpoint) from context or (None, None) if unavailable."""
     if ctx and ctx.obj:
         return (
             ctx.obj.get("profile"),
@@ -91,7 +89,7 @@ def query(
         "--digest",
         help="Use HTTP Digest Authentication instead of Basic",
     ),
-    format: OutputFormat | None = typer.Option(  # noqa: B008
+    output_fmt: OutputFormat | None = typer.Option(  # noqa: B008
         None,
         "--format",
         "-f",
@@ -172,6 +170,8 @@ def query(
         typer.echo(f"Config error: {e}", err=True)
         raise typer.Exit(ExitCode.CONFIG_ERROR) from e
 
+    logger = get_logger("query")
+
     if verbose:
         typer.echo(f"Endpoint: {resolved.endpoint}", err=True)
         typer.echo(f"Timeout: {resolved.timeout}s", err=True)
@@ -194,8 +194,8 @@ def query(
         output_format = OutputFormat.table
     elif jsonl:
         output_format = OutputFormat.jsonl
-    elif format is not None:
-        output_format = format
+    elif output_fmt is not None:
+        output_format = output_fmt
     else:
         output_format = _detect_default_format()
 
@@ -216,10 +216,42 @@ def query(
     else:
         formatter = JSONFormatter()
 
+    logger.debug(
+        "query.execute",
+        endpoint=resolved.endpoint,
+        output_format=output_format.value,
+        query_bytes=len(query_text),
+    )
+
+    # Validate: RDF formats require CONSTRUCT/DESCRIBE queries
+    if (
+        output_format in RDF_FORMAT_ACCEPT_HEADERS
+        and not _is_rdf_query(query_text)
+    ):
+        typer.echo(
+            f"RDF format '{output_format.value}' requires a CONSTRUCT"
+            f" or DESCRIBE query. SELECT/ASK queries return tabular"
+            f" data — use table, csv, tsv, json, or sparql11 instead.",
+            err=True,
+        )
+        raise typer.Exit(ExitCode.INPUT_ERROR)
+
     try:
-        results = client.execute(query_text)
-        for line in formatter.format(results):
-            typer.echo(line)
+        start_time = time.perf_counter()
+        with sentry_sdk.start_span(op="sparql.query", name=output_format.value):
+            # Check if query is CONSTRUCT/DESCRIBE and format is RDF
+            if output_format in RDF_FORMAT_ACCEPT_HEADERS and _is_rdf_query(query_text):
+                # RDF pass-through: server serializes, we output raw response
+                accept_header = RDF_FORMAT_ACCEPT_HEADERS[output_format]
+                rdf_response = client.execute_rdf(query_text, accept_header)
+                typer.echo(rdf_response)
+            else:
+                # Tabular formats for SELECT/ASK queries
+                results = client.execute(query_text)
+                for line in formatter.format(results):
+                    typer.echo(line)
+        elapsed = time.perf_counter() - start_time
+        logger.debug("query.complete", duration_s=round(elapsed, 3))
     except SPARQLTimeoutError as e:
         typer.echo(f"Timeout: {e}", err=True)
         raise typer.Exit(ExitCode.TIMEOUT) from e

@@ -7,13 +7,13 @@ packages = ["sparql"]
 
 [project]
 name = "sparql-cli"
-version = "0.1.1"
+version = "0.1.2"
 description = "CLI tool for querying SPARQL endpoints"
 readme = "README.md"
-license = "MIT"
 authors = [
   {name = "Vlad Korolev", email = "vlad@v-lad.org"}
 ]
+license = "MIT"
 requires-python = ">=3.13"
 dependencies = [
   "typer>=0.9.0",
@@ -24,11 +24,6 @@ dependencies = [
   "sentry-sdk>=1.40.0"
 ]
 
-[project.urls]
-Homepage = "https://github.com/vlad/sparql-cli"
-Repository = "https://github.com/vlad/sparql-cli"
-Issues = "https://github.com/vlad/sparql-cli/issues"
-
 [project.optional-dependencies]
 dev = [
   "pytest>=7.4.0",
@@ -36,6 +31,11 @@ dev = [
   "mypy>=1.7.0",
   "ruff>=0.1.0"
 ]
+
+[project.urls]
+Homepage = "https://github.com/vladistan/sparql-cli"
+Repository = "https://github.com/vladistan/sparql-cli"
+Issues = "https://github.com/vladistan/sparql-cli/issues"
 
 [project.scripts]
 sparql = "sparql.cli.main:app"

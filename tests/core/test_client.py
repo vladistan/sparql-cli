@@ -4,7 +4,9 @@ import pytest
 
 # Wikidata requires descriptive User-Agent per their robot policy
 # See: https://w.wiki/4wJS
-WIKIDATA_USER_AGENT = "sparql-cli/1.0 (test suite)"
+WIKIDATA_USER_AGENT = (
+    "sparql-cli/1.0 (https://github.com/vladistan/sparql-cli; test suite)"
+)
 
 
 # Integration tests against real endpoint
@@ -114,3 +116,81 @@ def test_client_handles_connection_error():
 
     with pytest.raises(NetworkError):
         list(client.execute("SELECT * WHERE { ?s ?p ?o }"))
+
+
+def test_is_rdf_query_detects_construct():
+    from sparql.core.client import _is_rdf_query
+
+    assert _is_rdf_query("CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }")
+    assert _is_rdf_query("construct { ?s ?p ?o } where { ?s ?p ?o }")
+    assert _is_rdf_query(
+        "PREFIX ex: <http://example.org/> CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }"
+    )
+
+
+def test_is_rdf_query_detects_describe():
+    from sparql.core.client import _is_rdf_query
+
+    assert _is_rdf_query("DESCRIBE <http://example.org/resource>")
+    assert _is_rdf_query("describe <http://example.org/resource>")
+    assert _is_rdf_query(
+        "PREFIX ex: <http://example.org/> DESCRIBE ex:resource"
+    )
+
+
+def test_is_rdf_query_rejects_select():
+    from sparql.core.client import _is_rdf_query
+
+    assert not _is_rdf_query("SELECT * WHERE { ?s ?p ?o }")
+    assert not _is_rdf_query("select * where { ?s ?p ?o }")
+
+
+def test_is_rdf_query_rejects_ask():
+    from sparql.core.client import _is_rdf_query
+
+    assert not _is_rdf_query("ASK { ?s ?p ?o }")
+    assert not _is_rdf_query("ask { ?s ?p ?o }")
+
+
+@pytest.mark.integration
+def test_execute_rdf_returns_turtle():
+    from sparql.core.client import SPARQLClient
+
+    client = SPARQLClient(
+        endpoint_url="https://query.wikidata.org/sparql",
+        timeout=30.0,
+        user_agent=WIKIDATA_USER_AGENT,
+    )
+
+    query = (
+        "CONSTRUCT { <http://example.org/s> <http://example.org/p>"
+        " <http://example.org/o> } WHERE { BIND(1 AS ?x) }"
+    )
+    rdf_response = client.execute_rdf(query, "text/turtle")
+
+    assert isinstance(rdf_response, str)
+    assert len(rdf_response) > 0
+    # Turtle format should contain at least one triple or prefix
+    assert "<http://example.org/" in rdf_response or "@prefix" in rdf_response
+
+
+@pytest.mark.integration
+def test_execute_rdf_returns_ntriples():
+    from sparql.core.client import SPARQLClient
+
+    client = SPARQLClient(
+        endpoint_url="https://query.wikidata.org/sparql",
+        timeout=30.0,
+        user_agent=WIKIDATA_USER_AGENT,
+    )
+
+    query = (
+        "CONSTRUCT { <http://example.org/s> <http://example.org/p>"
+        " <http://example.org/o> } WHERE { BIND(1 AS ?x) }"
+    )
+    rdf_response = client.execute_rdf(query, "application/n-triples")
+
+    assert isinstance(rdf_response, str)
+    assert len(rdf_response) > 0
+    # N-Triples format uses full URIs
+    assert "<http://example.org/" in rdf_response

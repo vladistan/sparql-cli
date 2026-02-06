@@ -4,9 +4,9 @@ Models follow SPARQL 1.1 Query Results JSON Format specification.
 See: https://www.w3.org/TR/sparql11-results-json/
 """
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 
 BindingType = Literal["uri", "literal", "bnode", "typed-literal"]
 
@@ -27,6 +27,19 @@ class BindingValue(BaseModel):
     xml_lang: str | None = Field(default=None, alias="xml:lang")
 
     model_config = {"populate_by_name": True}
+
+    @field_validator("value", mode="before")
+    @classmethod
+    def coerce_numeric_to_string(cls, v: Any) -> str:
+        """Coerce numeric values to strings for XSD datatypes.
+
+        Some SPARQL endpoints return numeric literals (xsd:double, xsd:integer)
+        as Python floats/ints in JSON responses rather than strings.
+        """
+        if isinstance(v, (int, float)):
+            return str(v)
+        # Pydantic will validate the type; cast for mypy satisfaction
+        return str(v) if not isinstance(v, str) else v
 
 
 class QueryResult(BaseModel):
