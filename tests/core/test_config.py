@@ -5,6 +5,7 @@ from sparql.core.config import (
     AuthType,
     EndpointProfile,
     EndpointType,
+    HTTPMethod,
     load_config,
     resolve_config,
 )
@@ -608,3 +609,209 @@ username = "config_user"
     assert resolved.username == "env_user"
     # Profile URL (no override)
     assert resolved.endpoint == "https://config.example.com/sparql"
+
+
+# --- HTTPMethod Tests ---
+
+
+def test_http_method_enum_values():
+    assert HTTPMethod.GET.value == "GET"
+    assert HTTPMethod.POST.value == "POST"
+
+
+def test_endpoint_profile_creates_with_http_method():
+    profile = EndpointProfile(
+        url="https://example.com/sparql",
+        http_method=HTTPMethod.GET,
+    )
+    assert profile.http_method == HTTPMethod.GET
+
+
+def test_endpoint_profile_defaults_http_method_to_none():
+    profile = EndpointProfile(url="https://example.com/sparql")
+    assert profile.http_method is None
+
+
+def test_resolve_config_defaults_virtuoso_to_get(temp_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="dbpedia",
+        endpoints={
+            "dbpedia": EndpointProfile(
+                url="https://dbpedia.org/sparql",
+                endpoint_type=EndpointType.VIRTUOSO,
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.http_method == HTTPMethod.GET
+
+
+def test_resolve_config_defaults_generic_to_post(temp_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="wikidata",
+        endpoints={
+            "wikidata": EndpointProfile(
+                url="https://query.wikidata.org/sparql",
+                endpoint_type=EndpointType.GENERIC,
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.http_method == HTTPMethod.POST
+
+
+def test_resolve_config_respects_explicit_http_method(temp_dir, monkeypatch):
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="custom",
+        endpoints={
+            "custom": EndpointProfile(
+                url="https://example.com/sparql",
+                endpoint_type=EndpointType.GENERIC,
+                http_method=HTTPMethod.GET,
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.http_method == HTTPMethod.GET
+
+
+def test_resolve_config_explicit_http_method_overrides_endpoint_type(
+    temp_dir, monkeypatch
+):
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="override",
+        endpoints={
+            "override": EndpointProfile(
+                url="https://dbpedia.org/sparql",
+                endpoint_type=EndpointType.VIRTUOSO,
+                http_method=HTTPMethod.POST,
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.http_method == HTTPMethod.POST
+
+
+# --- Update URL Tests ---
+
+
+def test_endpoint_profile_accepts_update_url():
+    profile = EndpointProfile(
+        url="https://example.com/sparql/query",
+        update_url="https://example.com/sparql/update",
+    )
+    assert profile.update_url == "https://example.com/sparql/update"
+
+
+def test_endpoint_profile_defaults_update_url_to_none():
+    profile = EndpointProfile(url="https://example.com/sparql")
+    assert profile.update_url is None
+
+
+def test_resolved_config_derives_update_endpoint_from_explicit_url(
+    temp_dir, monkeypatch
+):
+    """Explicit update_url in profile takes highest priority."""
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="test",
+        endpoints={
+            "test": EndpointProfile(
+                url="https://example.com/sparql/query",
+                update_url="https://example.com/sparql/update",
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.update_endpoint == "https://example.com/sparql/update"
+
+
+def test_resolved_config_derives_update_endpoint_by_replacing_query(
+    temp_dir, monkeypatch
+):
+    """When no explicit update_url, replace /query with /update."""
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="test",
+        endpoints={
+            "test": EndpointProfile(
+                url="https://example.com/sparql/query",
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.update_endpoint == "https://example.com/sparql/update"
+
+
+def test_resolved_config_derives_update_endpoint_trailing_query(
+    temp_dir, monkeypatch
+):
+    """Handles URLs ending with /query (common pattern)."""
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="test",
+        endpoints={
+            "test": EndpointProfile(
+                url="https://fuseki.example.com/dataset/query",
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.update_endpoint == "https://fuseki.example.com/dataset/update"
+
+
+def test_resolved_config_falls_back_to_endpoint_url(temp_dir, monkeypatch):
+    """When no update_url and URL has no /query, use endpoint URL as-is."""
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="test",
+        endpoints={
+            "test": EndpointProfile(
+                url="https://query.wikidata.org/sparql",
+            ),
+        },
+    )
+    resolved = resolve_config(config)
+
+    assert resolved.update_endpoint == "https://query.wikidata.org/sparql"
+
+
+def test_resolved_config_update_endpoint_with_cli_endpoint_override(
+    temp_dir, monkeypatch
+):
+    """CLI endpoint override should also affect update endpoint derivation."""
+    monkeypatch.setenv("HOME", str(temp_dir))
+
+    config = AppConfig(
+        default_endpoint="test",
+        endpoints={
+            "test": EndpointProfile(
+                url="https://example.com/sparql",
+            ),
+        },
+    )
+    resolved = resolve_config(
+        config,
+        cli_endpoint="https://other.example.com/dataset/query",
+    )
+
+    assert resolved.update_endpoint == "https://other.example.com/dataset/update"

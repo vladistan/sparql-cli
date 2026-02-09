@@ -9,7 +9,7 @@ import sentry_sdk
 from sparql.core.exceptions import NetworkError
 from sparql.core.exceptions import TimeoutError as SPARQLTimeoutError
 from sparql.core.logging import get_logger
-from sparql.core.models import BindingValue, QueryResult
+from sparql.core.models import BindingValue, QueryResult, UpdateResult
 
 
 def _is_rdf_query(query: str) -> bool:
@@ -25,8 +25,8 @@ def _is_rdf_query(query: str) -> bool:
 class SPARQLClient:
     """Executes SPARQL queries against remote endpoints.
 
-    Sends POST requests with query strings, handles authentication,
-    and parses JSON results or returns raw RDF serializations.
+    Supports both GET and POST methods. GET is required for some endpoints
+    (e.g., Virtuoso), while POST is standard for most SPARQL endpoints.
     """
 
     def __init__(
@@ -37,10 +37,12 @@ class SPARQLClient:
         username: str | None = None,
         password: str | None = None,
         digest_auth: bool = False,
+        http_method: str = "POST",
     ) -> None:
         self.endpoint_url = endpoint_url
         self.timeout = timeout
         self.user_agent = user_agent
+        self.http_method = http_method
         self._logger = get_logger("client")
         self.auth: httpx.DigestAuth | tuple[str, str] | None = None
         if username and password:
@@ -59,18 +61,29 @@ class SPARQLClient:
             "query.execute",
             endpoint=self.endpoint_url,
             query_bytes=len(query),
+            http_method=self.http_method,
         )
         try:
-            with sentry_sdk.start_span(op="http.post", name="SPARQL SELECT/ASK"):
+            span_op = f"http.{self.http_method.lower()}"
+            with sentry_sdk.start_span(op=span_op, name="SPARQL SELECT/ASK"):
                 with httpx.Client(timeout=self.timeout, auth=self.auth) as client:
-                    response = client.post(
-                        self.endpoint_url,
-                        data={"query": query},
-                        headers={
-                            "Accept": "application/sparql-results+json",
-                            "User-Agent": self.user_agent,
-                        },
-                    )
+                    headers = {
+                        "Accept": "application/sparql-results+json",
+                        "User-Agent": self.user_agent,
+                    }
+
+                    if self.http_method == "GET":
+                        response = client.get(
+                            self.endpoint_url,
+                            params={"query": query},
+                            headers=headers,
+                        )
+                    else:
+                        response = client.post(
+                            self.endpoint_url,
+                            data={"query": query},
+                            headers=headers,
+                        )
                     response.raise_for_status()
 
                     data = response.json()
@@ -113,6 +126,58 @@ class SPARQLClient:
         except httpx.RequestError as e:
             raise NetworkError(f"Failed to connect to {self.endpoint_url}: {e}") from e
 
+    def execute_update(
+        self, update: str, update_endpoint: str
+    ) -> UpdateResult:
+        """Execute a SPARQL UPDATE operation (INSERT, DELETE, LOAD, etc.).
+
+        Uses POST with Content-Type: application/sparql-update.
+        Returns UpdateResult instead of raising on HTTP 4xx errors,
+        since update failures are expected operational outcomes.
+        """
+        self._logger.debug(
+            "update.execute",
+            endpoint=update_endpoint,
+            update_bytes=len(update),
+        )
+        try:
+            with sentry_sdk.start_span(
+                op="http.post", name="SPARQL UPDATE"
+            ):
+                with httpx.Client(
+                    timeout=self.timeout, auth=self.auth
+                ) as client:
+                    headers = {
+                        "Content-Type": "application/sparql-update",
+                        "User-Agent": self.user_agent,
+                    }
+                    response = client.post(
+                        update_endpoint,
+                        content=update,
+                        headers=headers,
+                    )
+                    response.raise_for_status()
+                    return UpdateResult(
+                        success=True,
+                        status_code=response.status_code,
+                        message=response.text,
+                    )
+        except httpx.HTTPStatusError as e:
+            return UpdateResult(
+                success=False,
+                status_code=e.response.status_code,
+                message=e.response.text[:500],
+            )
+        except httpx.TimeoutException as e:
+            raise SPARQLTimeoutError(
+                f"Update timed out after {self.timeout}s: "
+                f"{update_endpoint}"
+            ) from e
+        except httpx.RequestError as e:
+            raise NetworkError(
+                f"Failed to connect to {update_endpoint}: {e}"
+            ) from e
+
     def execute_rdf(self, query: str, accept_header: str) -> str:
         """Execute CONSTRUCT/DESCRIBE query returning server-serialized RDF graph."""
         self._logger.debug(
@@ -120,20 +185,31 @@ class SPARQLClient:
             endpoint=self.endpoint_url,
             accept=accept_header,
             query_bytes=len(query),
+            http_method=self.http_method,
         )
         try:
+            span_op = f"http.{self.http_method.lower()}"
             with sentry_sdk.start_span(
-                op="http.post", name="SPARQL CONSTRUCT/DESCRIBE"
+                op=span_op, name="SPARQL CONSTRUCT/DESCRIBE"
             ):
                 with httpx.Client(timeout=self.timeout, auth=self.auth) as client:
-                    response = client.post(
-                        self.endpoint_url,
-                        data={"query": query},
-                        headers={
-                            "Accept": accept_header,
-                            "User-Agent": self.user_agent,
-                        },
-                    )
+                    headers = {
+                        "Accept": accept_header,
+                        "User-Agent": self.user_agent,
+                    }
+
+                    if self.http_method == "GET":
+                        response = client.get(
+                            self.endpoint_url,
+                            params={"query": query},
+                            headers=headers,
+                        )
+                    else:
+                        response = client.post(
+                            self.endpoint_url,
+                            data={"query": query},
+                            headers=headers,
+                        )
                     response.raise_for_status()
                     return response.text
 

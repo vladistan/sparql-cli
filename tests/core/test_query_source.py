@@ -119,3 +119,48 @@ def test_resolve_query_strips_whitespace():
     )
 
     assert result == "SELECT * WHERE { ?s ?p ?o }"
+
+
+# --- UPDATE keyword detection ---
+
+
+@pytest.mark.parametrize(
+    "keyword",
+    ["INSERT", "DELETE", "LOAD", "CLEAR", "DROP", "CREATE", "COPY", "MOVE", "ADD"],
+)
+def test_resolve_query_detects_update_keyword_as_inline(keyword):
+    """UPDATE keywords in file_path position should be treated as inline SPARQL."""
+    from sparql.core.query_source import resolve_query_source
+
+    query = f"{keyword} DATA {{ <http://ex.org/s> <http://ex.org/p> 'val' }}"
+    result = resolve_query_source(inline=None, file_path=query, stdin=None)
+
+    assert result == query
+
+
+def test_resolve_query_detects_lowercase_update_keyword():
+    from sparql.core.query_source import resolve_query_source
+
+    query = "insert data { <http://ex.org/s> <http://ex.org/p> 'val' }"
+    result = resolve_query_source(inline=None, file_path=query, stdin=None)
+
+    assert result == query
+
+
+def test_is_update_query_detects_update_keywords():
+    from sparql.core.query_source import is_update_query
+
+    assert is_update_query("INSERT DATA { ... }") is True
+    assert is_update_query("DELETE WHERE { ... }") is True
+    assert is_update_query("LOAD <http://ex.org/data>") is True
+    assert is_update_query("CLEAR GRAPH <http://ex.org/g>") is True
+    assert is_update_query("DROP ALL") is True
+    assert is_update_query("SELECT ?s WHERE { ?s ?p ?o }") is False
+    assert is_update_query("ASK { ?s ?p ?o }") is False
+
+
+def test_is_update_query_handles_prefix_before_update():
+    from sparql.core.query_source import is_update_query
+
+    query = "PREFIX ex: <http://ex.org/> INSERT DATA { ex:s ex:p 'val' }"
+    assert is_update_query(query) is True

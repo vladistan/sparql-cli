@@ -31,6 +31,13 @@ class EndpointType(str, Enum):
     GRAPHDB = "graphdb"
 
 
+class HTTPMethod(str, Enum):
+    """HTTP methods for SPARQL queries."""
+
+    GET = "GET"
+    POST = "POST"
+
+
 class EndpointProfile(BaseModel):
     """Named endpoint configuration with optional authentication."""
 
@@ -41,6 +48,8 @@ class EndpointProfile(BaseModel):
     username: str | None = None
     password: str | None = None
     auth_type: AuthType = AuthType.NONE
+    http_method: HTTPMethod | None = None
+    update_url: str | None = None
 
     # Server-specific parameters
     database: str | None = None  # MarkLogic database name
@@ -150,12 +159,41 @@ class ResolvedConfig(BaseModel):
     password: str | None = None
     auth_type: AuthType = AuthType.NONE
     user_agent: str | None = None
+    http_method: HTTPMethod = HTTPMethod.POST
+
+    update_endpoint: str = ""
 
     # Server-specific parameters
     database: str | None = None
     namespace: str | None = None
     repository: str | None = None
     reasoning: bool | None = None
+
+
+def _derive_update_url(endpoint_url: str, explicit_update_url: str | None) -> str:
+    """Derive SPARQL UPDATE endpoint URL.
+
+    Priority: explicit update_url > replace /query path segment > endpoint as-is.
+    Only replaces /query in the URL path, not in the hostname.
+    """
+    if explicit_update_url:
+        return explicit_update_url
+
+    # Split at ://  to isolate scheme from rest, then find path
+    scheme_sep = endpoint_url.find("://")
+    if scheme_sep == -1:
+        return endpoint_url
+    after_scheme = endpoint_url[scheme_sep + 3 :]
+    slash_pos = after_scheme.find("/")
+    if slash_pos == -1:
+        return endpoint_url
+
+    host = endpoint_url[: scheme_sep + 3 + slash_pos]
+    path = after_scheme[slash_pos:]
+
+    if "/query" in path:
+        return host + path.replace("/query", "/update", 1)
+    return endpoint_url
 
 
 def resolve_config(
@@ -228,6 +266,18 @@ def resolve_config(
     # Resolve format: CLI > Config default
     format_value = cli_format or config.default_format
 
+    # Resolve HTTP method: Profile > Auto-detect from endpoint type
+    # VIRTUOSO endpoints require GET, all others default to POST
+    if profile_config.http_method is not None:
+        http_method = profile_config.http_method
+    elif profile_config.endpoint_type == EndpointType.VIRTUOSO:
+        http_method = HTTPMethod.GET
+    else:
+        http_method = HTTPMethod.POST
+
+    # Derive update endpoint URL
+    update_endpoint = _derive_update_url(endpoint, profile_config.update_url)
+
     return ResolvedConfig(
         endpoint=endpoint,
         endpoint_type=profile_config.endpoint_type,
@@ -237,6 +287,8 @@ def resolve_config(
         password=password,
         auth_type=auth_type,
         user_agent=profile_config.user_agent,
+        http_method=http_method,
+        update_endpoint=update_endpoint,
         database=profile_config.database,
         namespace=profile_config.namespace,
         repository=profile_config.repository,

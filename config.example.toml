@@ -13,6 +13,17 @@ url = "https://dbpedia.org/sparql"
 endpoint_type = "virtuoso"
 timeout = 30.0
 
+# --- Writable Endpoint Example ---
+# For endpoints that support SPARQL UPDATE (INSERT, DELETE, LOAD, etc.),
+# set update_url to the update endpoint. If omitted, sparql-cli derives it:
+# 1. Explicit update_url (if set)
+# 2. Replace /query with /update in the endpoint URL
+# 3. Use the endpoint URL as-is (fallback)
+[endpoints.fuseki-local]
+url = "http://localhost:3030/dataset/query"
+# update_url = "http://localhost:3030/dataset/update"  # auto-derived from url
+timeout = 30.0
+
 [endpoints.uniprot]
 url = "https://sparql.uniprot.org/sparql"
 endpoint_type = "generic"

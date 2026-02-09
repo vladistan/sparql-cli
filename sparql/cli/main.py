@@ -17,6 +17,7 @@ from sparql.cli.commands.convenience import (
     predicates,
 )
 from sparql.cli.commands.query import query
+from sparql.cli.commands.update import update
 from sparql.core.logging import setup_logging
 from sparql.core.monitoring import setup_sentry
 
@@ -152,6 +153,7 @@ def test_sentry() -> None:
 
 # Register commands
 app.command()(query)
+app.command()(update)
 app.command()(graphs)
 app.command()(classes)
 app.command()(predicates)

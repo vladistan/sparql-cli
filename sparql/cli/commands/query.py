@@ -186,6 +186,7 @@ def query(
         username=resolved.username,
         password=resolved.password,
         digest_auth=resolved.auth_type == AuthType.DIGEST,
+        http_method=resolved.http_method.value,
     )
 
     # Resolve output format with precedence:

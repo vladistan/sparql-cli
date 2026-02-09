@@ -55,8 +55,17 @@ class QueryResult(BaseModel):
 
 
 class EndpointConfig(BaseModel):
-    """Configuration for a SPARQL endpoint connection."""
-
     url: HttpUrl
     timeout: float = Field(default=30.0, gt=0)
     user_agent: str = "sparql-cli/1.0"
+
+
+class UpdateResult(BaseModel):
+    """Captures the outcome of INSERT, DELETE, LOAD, CLEAR, DROP operations.
+
+    Unlike queries, updates don't return bindings - only success/failure status.
+    """
+
+    success: bool
+    status_code: int
+    message: str

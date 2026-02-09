@@ -165,3 +165,35 @@ def test_binding_value_preserves_string_value():
     result = BindingValue(**data)
 
     assert result.value == "42"
+
+
+def test_update_result_holds_success_status():
+    """Test UpdateResult model stores success status."""
+    from sparql.core.models import UpdateResult
+
+    result = UpdateResult(success=True, status_code=200, message="Update successful")
+
+    assert result.success is True
+    assert result.status_code == 200
+    assert result.message == "Update successful"
+
+
+def test_update_result_holds_failure_status():
+    """Test UpdateResult model stores failure status."""
+    from sparql.core.models import UpdateResult
+
+    result = UpdateResult(
+        success=False, status_code=400, message="Bad Request: Invalid syntax"
+    )
+
+    assert result.success is False
+    assert result.status_code == 400
+    assert result.message == "Bad Request: Invalid syntax"
+
+
+def test_update_result_requires_all_fields():
+    """Test UpdateResult model requires all fields."""
+    from sparql.core.models import UpdateResult
+
+    with pytest.raises(ValidationError):
+        UpdateResult(success=True, status_code=200)  # Missing message

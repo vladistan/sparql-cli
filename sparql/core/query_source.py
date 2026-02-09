@@ -11,6 +11,26 @@ from typing import TextIO
 
 from sparql.core.exceptions import ConfigError
 
+_QUERY_KEYWORDS = ("SELECT", "ASK", "CONSTRUCT", "DESCRIBE", "PREFIX")
+_UPDATE_KEYWORDS = (
+    "INSERT", "DELETE", "LOAD", "CLEAR", "DROP", "CREATE", "COPY", "MOVE", "ADD",
+)
+_ALL_SPARQL_KEYWORDS = _QUERY_KEYWORDS + _UPDATE_KEYWORDS
+
+
+def is_update_query(query: str) -> bool:
+    """Check whether a SPARQL string is an UPDATE operation.
+
+    Handles PREFIX declarations before the actual UPDATE keyword.
+    """
+    import re
+
+    # Strip PREFIX declarations (single or multi-line)
+    text = re.sub(
+        r"(?i)\bPREFIX\s+\S+\s+<[^>]*>\s*", "", query.strip()
+    ).strip().upper()
+    return text.startswith(_UPDATE_KEYWORDS)
+
 
 def resolve_query_source(
     inline: str | None,
@@ -33,8 +53,7 @@ def resolve_query_source(
         # Convert to string first to check for inline SPARQL
         # (must happen before Path conversion to preserve // in URLs)
         path_str = str(file_path)
-        sparql_keywords = ("SELECT", "ASK", "CONSTRUCT", "DESCRIBE", "PREFIX")
-        if path_str.upper().startswith(sparql_keywords):
+        if path_str.upper().startswith(_ALL_SPARQL_KEYWORDS):
             return path_str.strip()
         # It's a file path
         path = file_path if isinstance(file_path, Path) else Path(file_path)
