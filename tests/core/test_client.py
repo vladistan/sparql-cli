@@ -1,6 +1,14 @@
 """Tests for SPARQL client (Step 2.2)."""
 
+from unittest.mock import MagicMock
+
+import httpx
 import pytest
+
+from sparql.core.client import SPARQLClient, _is_rdf_query
+from sparql.core.exceptions import NetworkError
+from sparql.core.exceptions import TimeoutError as SPARQLTimeoutError
+from sparql.core.models import BindingValue, QueryResult, UpdateResult
 
 # Wikidata requires descriptive User-Agent per their robot policy
 # See: https://w.wiki/4wJS
@@ -9,11 +17,8 @@ WIKIDATA_USER_AGENT = (
 )
 
 
-# Integration tests against real endpoint
 @pytest.mark.integration
 def test_client_executes_query_against_wikidata():
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -24,14 +29,11 @@ def test_client_executes_query_against_wikidata():
     results = list(client.execute(query))
 
     assert len(results) == 5
-    assert results[0].bindings
+    assert len(results[0].bindings) > 0
 
 
 @pytest.mark.integration
 def test_client_returns_iterator_of_query_result():
-    from sparql.core.client import SPARQLClient
-    from sparql.core.models import QueryResult
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -49,9 +51,6 @@ def test_client_returns_iterator_of_query_result():
 
 @pytest.mark.integration
 def test_client_parses_sparql_json_results():
-    from sparql.core.client import SPARQLClient
-    from sparql.core.models import BindingValue
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -71,9 +70,6 @@ def test_client_parses_sparql_json_results():
 
 @pytest.mark.integration
 def test_client_handles_http_error():
-    from sparql.core.client import SPARQLClient
-    from sparql.core.exceptions import NetworkError
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -89,9 +85,6 @@ def test_client_handles_http_error():
 
 @pytest.mark.integration
 def test_client_handles_timeout():
-    from sparql.core.client import SPARQLClient
-    from sparql.core.exceptions import TimeoutError
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=0.001,  # Unrealistically short timeout
@@ -100,14 +93,11 @@ def test_client_handles_timeout():
 
     query = "SELECT * WHERE { ?s ?p ?o } LIMIT 1"
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(SPARQLTimeoutError):
         list(client.execute(query))
 
 
 def test_client_handles_connection_error():
-    from sparql.core.client import SPARQLClient
-    from sparql.core.exceptions import NetworkError
-
     client = SPARQLClient(
         endpoint_url="http://this-endpoint-does-not-exist-12345.invalid/sparql",
         timeout=5.0,
@@ -119,8 +109,6 @@ def test_client_handles_connection_error():
 
 
 def test_is_rdf_query_detects_construct():
-    from sparql.core.client import _is_rdf_query
-
     assert _is_rdf_query("CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }")
     assert _is_rdf_query("construct { ?s ?p ?o } where { ?s ?p ?o }")
     assert _is_rdf_query(
@@ -129,8 +117,6 @@ def test_is_rdf_query_detects_construct():
 
 
 def test_is_rdf_query_detects_describe():
-    from sparql.core.client import _is_rdf_query
-
     assert _is_rdf_query("DESCRIBE <http://example.org/resource>")
     assert _is_rdf_query("describe <http://example.org/resource>")
     assert _is_rdf_query(
@@ -139,23 +125,57 @@ def test_is_rdf_query_detects_describe():
 
 
 def test_is_rdf_query_rejects_select():
-    from sparql.core.client import _is_rdf_query
-
     assert not _is_rdf_query("SELECT * WHERE { ?s ?p ?o }")
     assert not _is_rdf_query("select * where { ?s ?p ?o }")
 
 
 def test_is_rdf_query_rejects_ask():
-    from sparql.core.client import _is_rdf_query
-
     assert not _is_rdf_query("ASK { ?s ?p ?o }")
     assert not _is_rdf_query("ask { ?s ?p ?o }")
 
 
+def test_execute_parses_ask_true_response(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {"head": {}, "boolean": True}
+
+    _mock_httpx_client(monkeypatch, mock_response)
+
+    client = SPARQLClient(
+        endpoint_url="https://example.com/sparql",
+        timeout=30.0,
+        user_agent="test-agent/1.0",
+    )
+
+    results = list(client.execute("ASK { ?s ?p ?o }"))
+
+    assert len(results) == 1
+    assert results[0].bindings["boolean"].value == "true"
+    assert results[0].variables == ["boolean"]
+
+
+def test_execute_parses_ask_false_response(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {"head": {}, "boolean": False}
+
+    _mock_httpx_client(monkeypatch, mock_response)
+
+    client = SPARQLClient(
+        endpoint_url="https://example.com/sparql",
+        timeout=30.0,
+        user_agent="test-agent/1.0",
+    )
+
+    results = list(client.execute("ASK { ?s ?p ?o }"))
+
+    assert len(results) == 1
+    assert results[0].bindings["boolean"].value == "false"
+    assert results[0].variables == ["boolean"]
+
+
 @pytest.mark.integration
 def test_execute_rdf_returns_turtle():
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -176,8 +196,6 @@ def test_execute_rdf_returns_turtle():
 
 @pytest.mark.integration
 def test_execute_rdf_returns_ntriples():
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -196,12 +214,7 @@ def test_execute_rdf_returns_ntriples():
     assert "<http://example.org/" in rdf_response
 
 
-# --- HTTP Method Tests ---
-
-
 def test_client_defaults_to_post():
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://example.com/sparql",
         timeout=30.0,
@@ -212,8 +225,6 @@ def test_client_defaults_to_post():
 
 
 def test_client_accepts_get_method():
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://example.com/sparql",
         timeout=30.0,
@@ -227,8 +238,6 @@ def test_client_accepts_get_method():
 @pytest.mark.integration
 def test_client_get_queries_dbpedia_successfully():
     """DBpedia (Virtuoso) requires GET — verify it works."""
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://dbpedia.org/sparql",
         timeout=30.0,
@@ -240,15 +249,12 @@ def test_client_get_queries_dbpedia_successfully():
     results = list(client.execute(query))
 
     assert len(results) == 5
-    assert results[0].bindings
+    assert len(results[0].bindings) > 0
 
 
 @pytest.mark.integration
 def test_client_post_fails_on_dbpedia():
     """DBpedia (Virtuoso) rejects POST with 405 — verify the bug scenario."""
-    from sparql.core.client import SPARQLClient
-    from sparql.core.exceptions import NetworkError
-
     client = SPARQLClient(
         endpoint_url="https://dbpedia.org/sparql",
         timeout=30.0,
@@ -264,8 +270,6 @@ def test_client_post_fails_on_dbpedia():
 @pytest.mark.integration
 def test_client_post_works_on_wikidata():
     """Wikidata accepts POST (default) — verify existing behavior preserved."""
-    from sparql.core.client import SPARQLClient
-
     client = SPARQLClient(
         endpoint_url="https://query.wikidata.org/sparql",
         timeout=30.0,
@@ -277,18 +281,11 @@ def test_client_post_works_on_wikidata():
     results = list(client.execute(query))
 
     assert len(results) == 3
-    assert results[0].bindings
-
-
-# --- execute_update Tests ---
+    assert len(results[0].bindings) > 0
 
 
 def _mock_httpx_client(monkeypatch, mock_response):
     """Set up a mock httpx.Client that returns the given response."""
-    from unittest.mock import MagicMock
-
-    import httpx
-
     mock_client_instance = MagicMock()
     mock_client_instance.__enter__ = MagicMock(
         return_value=mock_client_instance
@@ -303,11 +300,6 @@ def _mock_httpx_client(monkeypatch, mock_response):
 
 
 def test_execute_update_returns_update_result_on_success(monkeypatch):
-    from unittest.mock import MagicMock
-
-    from sparql.core.client import SPARQLClient
-    from sparql.core.models import UpdateResult
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.text = "Update OK"
@@ -333,10 +325,6 @@ def test_execute_update_returns_update_result_on_success(monkeypatch):
 
 
 def test_execute_update_sends_correct_content_type(monkeypatch):
-    from unittest.mock import MagicMock
-
-    from sparql.core.client import SPARQLClient
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.text = "OK"
@@ -360,10 +348,6 @@ def test_execute_update_sends_correct_content_type(monkeypatch):
 
 
 def test_execute_update_sends_to_update_endpoint(monkeypatch):
-    from unittest.mock import MagicMock
-
-    from sparql.core.client import SPARQLClient
-
     mock_response = MagicMock()
     mock_response.status_code = 200
     mock_response.text = "OK"
@@ -387,12 +371,6 @@ def test_execute_update_sends_to_update_endpoint(monkeypatch):
 
 
 def test_execute_update_returns_failure_on_http_error(monkeypatch):
-    from unittest.mock import MagicMock
-
-    import httpx
-
-    from sparql.core.client import SPARQLClient
-
     mock_response = MagicMock()
     mock_response.status_code = 400
     mock_response.text = "Bad SPARQL syntax"
@@ -419,13 +397,6 @@ def test_execute_update_returns_failure_on_http_error(monkeypatch):
 
 
 def test_execute_update_raises_on_timeout(monkeypatch):
-    from unittest.mock import MagicMock
-
-    import httpx
-
-    from sparql.core.client import SPARQLClient
-    from sparql.core.exceptions import TimeoutError
-
     mock_client_instance = MagicMock()
     mock_client_instance.__enter__ = MagicMock(
         return_value=mock_client_instance
@@ -442,7 +413,7 @@ def test_execute_update_raises_on_timeout(monkeypatch):
         user_agent="test-agent/1.0",
     )
 
-    with pytest.raises(TimeoutError):
+    with pytest.raises(SPARQLTimeoutError):
         client.execute_update(
             "INSERT DATA { <http://ex.org/s> <http://ex.org/p> 'val' }",
             update_endpoint="https://example.com/sparql/update",
@@ -450,13 +421,6 @@ def test_execute_update_raises_on_timeout(monkeypatch):
 
 
 def test_execute_update_raises_on_connection_error(monkeypatch):
-    from unittest.mock import MagicMock
-
-    import httpx
-
-    from sparql.core.client import SPARQLClient
-    from sparql.core.exceptions import NetworkError
-
     mock_client_instance = MagicMock()
     mock_client_instance.__enter__ = MagicMock(
         return_value=mock_client_instance

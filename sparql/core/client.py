@@ -13,10 +13,7 @@ from sparql.core.models import BindingValue, QueryResult, UpdateResult
 
 
 def _is_rdf_query(query: str) -> bool:
-    """Detect if query is CONSTRUCT or DESCRIBE (returns RDF graph).
-
-    Returns True for queries that return RDF graphs, False for SELECT/ASK.
-    """
+    """Detect if query is CONSTRUCT or DESCRIBE (returns RDF graph)."""
     query_upper = query.strip().upper()
     # Match CONSTRUCT or DESCRIBE at start (after optional PREFIX declarations)
     return bool(re.search(r"\b(CONSTRUCT|DESCRIBE)\b", query_upper))
@@ -51,6 +48,20 @@ class SPARQLClient:
             else:
                 self.auth = (username, password)
 
+    def _http_error_message(self, e: httpx.HTTPStatusError) -> str:
+        """Build diagnostic context from HTTP status, redirects, and response body."""
+        msg = f"HTTP {e.response.status_code} from {self.endpoint_url}"
+        if e.response.status_code == 302:
+            location = e.response.headers.get("Location", "")
+            if location:
+                msg += f"\nRedirect to: {location[:200]}"
+                msg += "\n(Endpoint redirected - may not support this query)"
+        elif e.response.status_code in (400, 500):
+            body = e.response.text[:500] if e.response.text else ""
+            if body:
+                msg += f"\nResponse: {body}"
+        return msg
+
     def execute(self, query: str) -> Iterator[QueryResult]:
         """Execute SELECT/ASK query returning tabular results.
 
@@ -64,8 +75,7 @@ class SPARQLClient:
             http_method=self.http_method,
         )
         try:
-            span_op = f"http.{self.http_method.lower()}"
-            with sentry_sdk.start_span(op=span_op, name="SPARQL SELECT/ASK"):
+            with sentry_sdk.start_span(op="http.client", name="SPARQL SELECT/ASK"):
                 with httpx.Client(timeout=self.timeout, auth=self.auth) as client:
                     headers = {
                         "Accept": "application/sparql-results+json",
@@ -88,7 +98,17 @@ class SPARQLClient:
 
                     data = response.json()
 
-                    # Get variable order from head.vars (SPARQL 1.1 JSON format)
+                    # ASK queries return {"head": {}, "boolean": true/false}
+                    # per SPARQL 1.1 Results JSON spec — no "results" key.
+                    if "boolean" in data:
+                        value = "true" if data["boolean"] else "false"
+                        bv = BindingValue(type="literal", value=value)
+                        yield QueryResult(
+                            bindings={"boolean": bv},
+                            variables=["boolean"],
+                        )
+                        return
+
                     variables = data.get("head", {}).get("vars", [])
 
                     for idx, result_row in enumerate(data["results"]["bindings"]):
@@ -107,22 +127,7 @@ class SPARQLClient:
                 f"Query timed out after {self.timeout}s: {self.endpoint_url}"
             ) from e
         except httpx.HTTPStatusError as e:
-            msg = f"HTTP {e.response.status_code} from {self.endpoint_url}"
-            # Add diagnostic details for common error codes
-            if e.response.status_code == 302:
-                location = e.response.headers.get("Location", "")
-                if location:
-                    msg += f"\nRedirect to: {location[:200]}"
-                    msg += "\n(Endpoint redirected - may not support this query)"
-            elif e.response.status_code == 400:
-                body = e.response.text[:500] if e.response.text else ""
-                if body:
-                    msg += f"\nResponse: {body}"
-            elif e.response.status_code == 500:
-                body = e.response.text[:500] if e.response.text else ""
-                if body:
-                    msg += f"\nResponse: {body}"
-            raise NetworkError(msg) from e
+            raise NetworkError(self._http_error_message(e)) from e
         except httpx.RequestError as e:
             raise NetworkError(f"Failed to connect to {self.endpoint_url}: {e}") from e
 
@@ -142,7 +147,7 @@ class SPARQLClient:
         )
         try:
             with sentry_sdk.start_span(
-                op="http.post", name="SPARQL UPDATE"
+                op="http.client", name="SPARQL UPDATE"
             ):
                 with httpx.Client(
                     timeout=self.timeout, auth=self.auth
@@ -188,9 +193,8 @@ class SPARQLClient:
             http_method=self.http_method,
         )
         try:
-            span_op = f"http.{self.http_method.lower()}"
             with sentry_sdk.start_span(
-                op=span_op, name="SPARQL CONSTRUCT/DESCRIBE"
+                op="http.client", name="SPARQL CONSTRUCT/DESCRIBE"
             ):
                 with httpx.Client(timeout=self.timeout, auth=self.auth) as client:
                     headers = {
@@ -218,20 +222,6 @@ class SPARQLClient:
                 f"Query timed out after {self.timeout}s: {self.endpoint_url}"
             ) from e
         except httpx.HTTPStatusError as e:
-            msg = f"HTTP {e.response.status_code} from {self.endpoint_url}"
-            if e.response.status_code == 302:
-                location = e.response.headers.get("Location", "")
-                if location:
-                    msg += f"\nRedirect to: {location[:200]}"
-                    msg += "\n(Endpoint redirected - may not support this query)"
-            elif e.response.status_code == 400:
-                body = e.response.text[:500] if e.response.text else ""
-                if body:
-                    msg += f"\nResponse: {body}"
-            elif e.response.status_code == 500:
-                body = e.response.text[:500] if e.response.text else ""
-                if body:
-                    msg += f"\nResponse: {body}"
-            raise NetworkError(msg) from e
+            raise NetworkError(self._http_error_message(e)) from e
         except httpx.RequestError as e:
             raise NetworkError(f"Failed to connect to {self.endpoint_url}: {e}") from e
