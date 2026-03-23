@@ -1,4 +1,4 @@
-"""Tests for convenience commands (Phase 5: classes, predicates)."""
+"""Tests for convenience commands (classes, predicates, explore)."""
 
 import pytest
 from typer.testing import CliRunner
@@ -11,7 +11,7 @@ runner = CliRunner()
 
 
 # =============================================================================
-# Classes Command Tests (Step 5.1)
+# Classes Command Tests
 # =============================================================================
 
 
@@ -114,7 +114,7 @@ def test_classes_connection_error_returns_network_code():
 
 
 # =============================================================================
-# Predicates Command Tests (Step 5.2)
+# Predicates Command Tests
 # =============================================================================
 
 
@@ -222,7 +222,7 @@ def test_convenience_commands_show_in_main_help(command):
 
 
 # =============================================================================
-# Explore Command Tests (Step 5.3)
+# Explore Command Tests
 # =============================================================================
 
 # Well-known Wikidata URI for testing (Douglas Adams)

@@ -1,4 +1,4 @@
-"""Tests for query source resolution (Step 2.3)."""
+"""Tests for query source resolution."""
 
 import pytest
 

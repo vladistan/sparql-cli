@@ -1,4 +1,4 @@
-"""Tests for SPARQL CLI Pydantic models (Step 2.1)."""
+"""Tests for SPARQL CLI Pydantic models."""
 
 import pytest
 from pydantic import ValidationError
@@ -100,7 +100,7 @@ def test_endpoint_config_has_defaults():
     config = EndpointConfig(url="https://example.org/sparql")
 
     assert config.timeout == 30.0
-    assert config.user_agent == "sparql-cli/1.0"
+    assert config.user_agent == "sparql-tool/1.0"
 
 
 def test_endpoint_config_accepts_custom_timeout():

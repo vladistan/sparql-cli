@@ -1,4 +1,4 @@
-"""Tests for query command (Step 2.4)."""
+"""Tests for query command."""
 
 import pytest
 from typer.testing import CliRunner

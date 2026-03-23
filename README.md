@@ -7,20 +7,20 @@ CLI tool for querying SPARQL endpoints from the command line.
 ### From PyPI (recommended)
 
 ```bash
-pip install sparql-cli
+pip install sparql-tool
 ```
 
 Or with [uv](https://github.com/astral-sh/uv):
 
 ```bash
-uv tool install sparql-cli
+uv tool install sparql-tool
 ```
 
 ### From Source
 
 ```bash
-git clone https://github.com/vlad/sparql-cli.git
-cd sparql-cli
+git clone https://github.com/vladistan/sparql-tool.git
+cd sparql-tool
 uv sync --dev
 ```
 
@@ -382,8 +382,8 @@ sparql config profiles
 ## Development
 
 ```bash
-git clone https://github.com/vlad/sparql-cli.git
-cd sparql-cli
+git clone https://github.com/vladistan/sparql-tool.git
+cd sparql-tool
 uv sync --dev
 
 # Run tests
@@ -406,6 +406,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Links
 
-- **Repository**: https://github.com/vlad/sparql-cli
-- **Issue Tracker**: https://github.com/vlad/sparql-cli/issues
-- **PyPI**: https://pypi.org/project/sparql-cli/
+- **Repository**: https://github.com/vladistan/sparql-tool
+- **Issue Tracker**: https://github.com/vladistan/sparql-tool/issues
+- **PyPI**: https://pypi.org/project/sparql-tool/

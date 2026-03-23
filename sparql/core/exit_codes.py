@@ -1,6 +1,6 @@
 """Standard exit codes for SPARQL CLI.
 
-Exit codes follow Unix conventions and CODE-PY-CLI-001 pattern.
+Exit codes follow Unix conventions.
 """
 
 from enum import IntEnum

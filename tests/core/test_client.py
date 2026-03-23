@@ -1,4 +1,4 @@
-"""Tests for SPARQL client (Step 2.2)."""
+"""Tests for SPARQL client."""
 
 from unittest.mock import MagicMock
 
@@ -13,7 +13,7 @@ from sparql.core.models import BindingValue, QueryResult, UpdateResult
 # Wikidata requires descriptive User-Agent per their robot policy
 # See: https://w.wiki/4wJS
 WIKIDATA_USER_AGENT = (
-    "sparql-cli/1.0 (https://github.com/vladistan/sparql-cli; test suite)"
+    "sparql-tool/1.0 (https://github.com/vladistan/sparql-tool; test suite)"
 )
 
 
@@ -101,7 +101,7 @@ def test_client_handles_connection_error():
     client = SPARQLClient(
         endpoint_url="http://this-endpoint-does-not-exist-12345.invalid/sparql",
         timeout=5.0,
-        user_agent="sparql-cli/1.0 (test)",
+        user_agent="sparql-tool/1.0 (test)",
     )
 
     with pytest.raises(NetworkError):
@@ -241,7 +241,7 @@ def test_client_get_queries_dbpedia_successfully():
     client = SPARQLClient(
         endpoint_url="https://dbpedia.org/sparql",
         timeout=30.0,
-        user_agent="sparql-cli/test (testing HTTP GET support)",
+        user_agent="sparql-tool/test (testing HTTP GET support)",
         http_method="GET",
     )
 
@@ -258,7 +258,7 @@ def test_client_post_fails_on_dbpedia():
     client = SPARQLClient(
         endpoint_url="https://dbpedia.org/sparql",
         timeout=30.0,
-        user_agent="sparql-cli/test (testing HTTP POST rejection)",
+        user_agent="sparql-tool/test (testing HTTP POST rejection)",
         http_method="POST",
     )
 

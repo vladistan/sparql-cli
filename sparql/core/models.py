@@ -57,7 +57,7 @@ class QueryResult(BaseModel):
 class EndpointConfig(BaseModel):
     url: HttpUrl
     timeout: float = Field(default=30.0, gt=0)
-    user_agent: str = "sparql-cli/1.0"
+    user_agent: str = "sparql-tool/1.0"
 
 
 class UpdateResult(BaseModel):

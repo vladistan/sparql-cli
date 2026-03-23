@@ -1,7 +1,4 @@
-"""Exception hierarchy for SPARQL CLI.
-
-Exit codes are defined in exit_codes.py and follow CODE-PY-CLI-001 pattern.
-"""
+"""Exception hierarchy for SPARQL CLI."""
 
 from sparql.core.exit_codes import ExitCode
 

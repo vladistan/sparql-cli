@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "sparql-cli"
-version = "0.1.4"
+name = "sparql-tool"
+version = "0.2.0"
 description = "CLI tool for querying SPARQL endpoints"
 readme = "README.md"
 authors = [
@@ -33,9 +33,9 @@ dev = [
 sparql = "sparql.cli.main:app"
 
 [project.urls]
-Homepage = "https://github.com/vladistan/sparql-cli"
-Repository = "https://github.com/vladistan/sparql-cli"
-Issues = "https://github.com/vladistan/sparql-cli/issues"
+Homepage = "https://github.com/vladistan/sparql-tool"
+Repository = "https://github.com/vladistan/sparql-tool"
+Issues = "https://github.com/vladistan/sparql-tool/issues"
 
 [tool.hatch.build.targets.wheel]
 packages = ["sparql"]

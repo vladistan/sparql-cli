@@ -118,7 +118,7 @@ def main(
 
 @app.command()
 def test_sentry() -> None:
-    """Send test events to Sentry for Phase 1 validation.
+    """Send test events to Sentry to verify integration.
 
     This command sends a test exception and performance transaction to verify
     Sentry integration is working correctly. Check your Sentry console to
@@ -126,12 +126,12 @@ def test_sentry() -> None:
     """
     # 1. Error tracking test
     try:
-        raise SentryTestError("Phase 1 Sentry test exception")
+        raise SentryTestError("Sentry test exception")
     except Exception as e:
         sentry_sdk.capture_exception(e)
 
     # 2. Performance tracing test (parent + child spans)
-    with sentry_sdk.start_transaction(op="test", name="phase1_test"):
+    with sentry_sdk.start_transaction(op="test", name="sentry_test"):
         with sentry_sdk.start_span(op="parent", name="Parent span"):
             with sentry_sdk.start_span(op="child", name="Child span"):
                 pass
@@ -140,12 +140,12 @@ def test_sentry() -> None:
     sentry_sdk.flush(timeout=5)
 
     # 4. Print verification instructions
-    typer.echo("✓ Test events sent to Sentry", err=True)
+    typer.echo("Test events sent to Sentry", err=True)
     typer.echo("", err=True)
     typer.echo("Verify in Sentry console:", err=True)
-    typer.echo("  1. Issues → Check for 'Phase 1 Sentry test exception'", err=True)
+    typer.echo("  1. Issues → Check for 'Sentry test exception'", err=True)
     typer.echo(
-        "  2. Performance → Check for 'phase1_test' transaction"
+        "  2. Performance → Check for 'sentry_test' transaction"
         " with parent/child spans",
         err=True,
     )

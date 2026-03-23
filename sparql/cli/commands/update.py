@@ -132,7 +132,7 @@ def update(
     client = SPARQLClient(
         endpoint_url=resolved.endpoint,
         timeout=resolved.timeout,
-        user_agent=resolved.user_agent or f"sparql-cli/{__version__}",
+        user_agent=resolved.user_agent or f"sparql-tool/{__version__}",
         username=resolved.username,
         password=resolved.password,
         digest_auth=resolved.auth_type == AuthType.DIGEST,
