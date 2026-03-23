@@ -1,0 +1,59 @@
+# SPARQL CLI Configuration
+# Copy to ~/.config/sparql/config.toml or ~/.sparqlrc
+
+# Default endpoint profile to use (must be defined in [endpoints.*])
+default_endpoint = "wikidata"
+# Default timeout in seconds (can be overridden per endpoint)
+default_timeout = 30.0
+# Default output format: json, table, csv, tsv
+default_format = "json"
+
+[endpoints.dbpedia]
+url = "https://dbpedia.org/sparql"
+endpoint_type = "virtuoso"
+timeout = 30.0
+
+# --- Writable Endpoint Example ---
+# For endpoints that support SPARQL UPDATE (INSERT, DELETE, LOAD, etc.),
+# set update_url to the update endpoint. If omitted, sparql-tool derives it:
+# 1. Explicit update_url (if set)
+# 2. Replace /query with /update in the endpoint URL
+# 3. Use the endpoint URL as-is (fallback)
+[endpoints.fuseki-local]
+url = "http://localhost:3030/dataset/query"
+# update_url = "http://localhost:3030/dataset/update"  # auto-derived from url
+timeout = 30.0
+
+[endpoints.uniprot]
+url = "https://sparql.uniprot.org/sparql"
+endpoint_type = "generic"
+timeout = 60.0
+
+[endpoints.wikidata]
+url = "https://query.wikidata.org/sparql"
+endpoint_type = "generic"
+timeout = 60.0
+user_agent = "sparql-tool/1.0"
+
+# --- URI Prefixes for Readable Output ---
+# Standard RDF prefixes are included by default. Add your own or override here.
+# User-defined prefixes are merged with standard prefixes (user overrides standard).
+[prefixes]
+# Standard prefixes (included by default, shown here for reference):
+rdf = "http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+rdfs = "http://www.w3.org/2000/01/rdf-schema#"
+owl = "http://www.w3.org/2002/07/owl#"
+xsd = "http://www.w3.org/2001/XMLSchema#"
+dc = "http://purl.org/dc/elements/1.1/"
+dcterms = "http://purl.org/dc/terms/"
+foaf = "http://xmlns.com/foaf/0.1/"
+skos = "http://www.w3.org/2004/02/skos/core#"
+schema = "http://schema.org/"
+# Wikidata-specific
+wd = "http://www.wikidata.org/entity/"
+wdt = "http://www.wikidata.org/prop/direct/"
+wikibase = "http://wikiba.se/ontology#"
+
+# Add your own custom prefixes:
+# myonto = "http://example.org/ontology#"
+# mydata = "http://example.org/data/"
