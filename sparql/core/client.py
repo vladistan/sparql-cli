@@ -62,11 +62,16 @@ class SPARQLClient:
                 msg += f"\nResponse: {body}"
         return msg
 
-    def execute(self, query: str) -> Iterator[QueryResult]:
+    def execute(
+        self, query: str, default_graph_uri: str | None = None
+    ) -> Iterator[QueryResult]:
         """Execute SELECT/ASK query returning tabular results.
 
         Yields QueryResult objects with bindings. First result includes
         variable ordering from head.vars. Subsequent results omit variables.
+
+        When default_graph_uri is set, it is sent as the SPARQL 1.1 Protocol
+        default-graph-uri parameter to scope the query's default graph.
         """
         self._logger.debug(
             "query.execute",
@@ -81,17 +86,20 @@ class SPARQLClient:
                         "Accept": "application/sparql-results+json",
                         "User-Agent": self.user_agent,
                     }
+                    request_params = {"query": query}
+                    if default_graph_uri:
+                        request_params["default-graph-uri"] = default_graph_uri
 
                     if self.http_method == "GET":
                         response = client.get(
                             self.endpoint_url,
-                            params={"query": query},
+                            params=request_params,
                             headers=headers,
                         )
                     else:
                         response = client.post(
                             self.endpoint_url,
-                            data={"query": query},
+                            data=request_params,
                             headers=headers,
                         )
                     response.raise_for_status()
@@ -183,8 +191,14 @@ class SPARQLClient:
                 f"Failed to connect to {update_endpoint}: {e}"
             ) from e
 
-    def execute_rdf(self, query: str, accept_header: str) -> str:
-        """Execute CONSTRUCT/DESCRIBE query returning server-serialized RDF graph."""
+    def execute_rdf(
+        self, query: str, accept_header: str, default_graph_uri: str | None = None
+    ) -> str:
+        """Execute CONSTRUCT/DESCRIBE query returning server-serialized RDF graph.
+
+        When default_graph_uri is set, it is sent as the SPARQL 1.1 Protocol
+        default-graph-uri parameter to scope the query's default graph.
+        """
         self._logger.debug(
             "query.execute_rdf",
             endpoint=self.endpoint_url,
@@ -201,17 +215,20 @@ class SPARQLClient:
                         "Accept": accept_header,
                         "User-Agent": self.user_agent,
                     }
+                    request_params = {"query": query}
+                    if default_graph_uri:
+                        request_params["default-graph-uri"] = default_graph_uri
 
                     if self.http_method == "GET":
                         response = client.get(
                             self.endpoint_url,
-                            params={"query": query},
+                            params=request_params,
                             headers=headers,
                         )
                     else:
                         response = client.post(
                             self.endpoint_url,
-                            data={"query": query},
+                            data=request_params,
                             headers=headers,
                         )
                     response.raise_for_status()

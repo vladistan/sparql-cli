@@ -1,4 +1,4 @@
-"""Tests for SPARQL client."""
+"""Tests for SPARQL client (Step 2.2)."""
 
 from unittest.mock import MagicMock
 
@@ -174,6 +174,96 @@ def test_execute_parses_ask_false_response(monkeypatch):
     assert results[0].variables == ["boolean"]
 
 
+def test_execute_sends_default_graph_uri_when_set(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "head": {"vars": []},
+        "results": {"bindings": []},
+    }
+
+    mock_client = _mock_httpx_client(monkeypatch, mock_response)
+
+    client = SPARQLClient(
+        endpoint_url="https://example.com/sparql",
+        timeout=30.0,
+        user_agent="test-agent/1.0",
+    )
+
+    list(client.execute("SELECT * WHERE { ?s ?p ?o }", "http://example.org/g"))
+
+    _, kwargs = mock_client.post.call_args
+    assert kwargs["data"]["default-graph-uri"] == "http://example.org/g"
+
+
+def test_execute_omits_default_graph_uri_when_none(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "head": {"vars": []},
+        "results": {"bindings": []},
+    }
+
+    mock_client = _mock_httpx_client(monkeypatch, mock_response)
+
+    client = SPARQLClient(
+        endpoint_url="https://example.com/sparql",
+        timeout=30.0,
+        user_agent="test-agent/1.0",
+    )
+
+    list(client.execute("SELECT * WHERE { ?s ?p ?o }"))
+
+    _, kwargs = mock_client.post.call_args
+    assert "default-graph-uri" not in kwargs["data"]
+
+
+def test_execute_sends_default_graph_uri_via_get(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.json.return_value = {
+        "head": {"vars": []},
+        "results": {"bindings": []},
+    }
+
+    mock_client = _mock_httpx_client(monkeypatch, mock_response)
+
+    client = SPARQLClient(
+        endpoint_url="https://example.com/sparql",
+        timeout=30.0,
+        user_agent="test-agent/1.0",
+        http_method="GET",
+    )
+
+    list(client.execute("SELECT * WHERE { ?s ?p ?o }", "http://example.org/g"))
+
+    _, kwargs = mock_client.get.call_args
+    assert kwargs["params"]["default-graph-uri"] == "http://example.org/g"
+
+
+def test_execute_rdf_sends_default_graph_uri_when_set(monkeypatch):
+    mock_response = MagicMock()
+    mock_response.raise_for_status = MagicMock()
+    mock_response.text = "@prefix ex: <http://example.org/> ."
+
+    mock_client = _mock_httpx_client(monkeypatch, mock_response)
+
+    client = SPARQLClient(
+        endpoint_url="https://example.com/sparql",
+        timeout=30.0,
+        user_agent="test-agent/1.0",
+    )
+
+    client.execute_rdf(
+        "CONSTRUCT { ?s ?p ?o } WHERE { ?s ?p ?o }",
+        "text/turtle",
+        "http://example.org/g",
+    )
+
+    _, kwargs = mock_client.post.call_args
+    assert kwargs["data"]["default-graph-uri"] == "http://example.org/g"
+
+
 @pytest.mark.integration
 def test_execute_rdf_returns_turtle():
     client = SPARQLClient(
@@ -292,6 +382,7 @@ def _mock_httpx_client(monkeypatch, mock_response):
     )
     mock_client_instance.__exit__ = MagicMock(return_value=False)
     mock_client_instance.post.return_value = mock_response
+    mock_client_instance.get.return_value = mock_response
 
     monkeypatch.setattr(
         httpx, "Client", MagicMock(return_value=mock_client_instance)

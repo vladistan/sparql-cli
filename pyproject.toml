@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "sparql-tool"
-version = "0.2.1"
+version = "0.2.2"
 description = "CLI tool for querying SPARQL endpoints"
 readme = "README.md"
 authors = [
@@ -31,6 +31,7 @@ dev = [
 
 [project.scripts]
 sparql = "sparql.cli.main:app"
+sparql-tool = "sparql.cli.main:app"
 
 [project.urls]
 Homepage = "https://github.com/vladistan/sparql-tool"

@@ -33,13 +33,14 @@ def _detect_default_format() -> OutputFormat:
 
 def _get_global_options(
     ctx: typer.Context | None,
-) -> tuple[str | None, str | None]:
+) -> tuple[str | None, str | None, str | None]:
     if ctx and ctx.obj:
         return (
             ctx.obj.get("profile"),
             ctx.obj.get("endpoint"),
+            ctx.obj.get("graph_filter"),
         )
-    return None, None
+    return None, None, None
 
 
 def query(
@@ -133,6 +134,9 @@ def query(
 
     Output format is auto-detected: table for interactive terminals,
     TSV for piped output. Override with --format or shorthand flags.
+
+    The global --graph/-G option scopes the query to a single named graph
+    via the SPARQL default-graph-uri protocol parameter.
     """
     stdin = None
     if not sys.stdin.isatty():
@@ -149,7 +153,7 @@ def query(
         raise typer.Exit(ExitCode.INPUT_ERROR) from e
 
     # Merge global options (command-specific takes precedence)
-    global_profile, global_endpoint = _get_global_options(ctx)
+    global_profile, global_endpoint, graph_filter = _get_global_options(ctx)
     profile = profile or global_profile
     endpoint = endpoint or global_endpoint
 
@@ -244,11 +248,13 @@ def query(
             if output_format in RDF_FORMAT_ACCEPT_HEADERS and _is_rdf_query(query_text):
                 # RDF pass-through: server serializes, we output raw response
                 accept_header = RDF_FORMAT_ACCEPT_HEADERS[output_format]
-                rdf_response = client.execute_rdf(query_text, accept_header)
+                rdf_response = client.execute_rdf(
+                    query_text, accept_header, default_graph_uri=graph_filter
+                )
                 typer.echo(rdf_response)
             else:
                 # Tabular formats for SELECT/ASK queries
-                results = client.execute(query_text)
+                results = client.execute(query_text, default_graph_uri=graph_filter)
                 for line in formatter.format(results):
                     typer.echo(line)
         elapsed = time.perf_counter() - start_time
